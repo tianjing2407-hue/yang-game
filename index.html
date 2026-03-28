@@ -461,11 +461,10 @@
 <!-- ===== 主界面 ===== -->
 <div class="header">
   <div style="display:flex;align-items:center;gap:8px;">
-    <button onclick="goHome()" style="background:none;border:1px solid rgba(255,255,255,0.2);border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;transition:all 0.2s;" title="返回首页">🏠</button>
+    <button onclick="goHome()" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:4px 12px;font-size:13px;cursor:pointer;color:#fff;display:flex;align-items:center;gap:4px;transition:all 0.2s;">🏠 主界面</button>
     <h1>💩 臭了个臭</h1>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
-    <button id="musicBtn" onclick="toggleMusic()" style="background:none;border:1px solid rgba(255,255,255,0.2);border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;transition:all 0.2s;">🔇</button>
     <div class="level-info">第 <span id="lvl">1</span> 关</div>
   </div>
 </div>
@@ -505,6 +504,18 @@
   <div id="tutorialTipText"></div>
   <button onclick="nextTutorialStep()" class="mbtn mbtn-p" style="margin-top:10px;padding:8px 24px;font-size:13px;" id="tutorialNextBtn">知道了 👌</button>
 </div>
+
+<!-- 全局固定音乐按钮 -->
+<button id="globalMusicBtn" onclick="event.stopPropagation();toggleMusic()" style="
+  position:fixed; top:12px; right:12px; z-index:999999;
+  width:44px; height:44px; border-radius:50%;
+  background:rgba(30,30,50,0.85); border:2px solid rgba(255,255,255,0.2);
+  font-size:22px; cursor:pointer; color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 12px rgba(0,0,0,0.4);
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+">🔇</button>
 
 <script>
 // ===================== 配置 =====================
@@ -664,7 +675,6 @@ function onTutorialMatch() {
 }
 
 function onTutorialComplete() {
-  isTutorial = false;
   localStorage.setItem('choulecou_tutorial', '1');
   updateTutorialBtn();
 }
@@ -843,6 +853,8 @@ let cleared = 0;
 let busy = false;
 let combo = 0;
 let lastMatch = 0;
+let matchSeq = 0;        // 消除序列号，防止同一波快速点击重复计combo
+let lastMatchSeq = 0;
 let undoStack = [];
 let nUndo = 3, nShuf = 1, nHint = 1;
 
@@ -1115,10 +1127,9 @@ function drawSlots(newIdx, highlightIcon) {
 
 // ===================== 点击卡牌（核心逻辑重写） =====================
 function clickCard(card, el) {
-  if (busy) return;
+  if (card.removed) return;
   if (slots.length >= SLOT_MAX) return;
-
-  busy = true;
+  matchSeq++;
 
   // 播放点击音效
   playSfx('click');
@@ -1219,7 +1230,6 @@ function checkAndClear() {
   }
 
   if (!matchIcon) {
-    busy = false;
     // 检查失败
     if (slots.length >= SLOT_MAX) {
       setTimeout(() => { playSfx('fail'); $('loseOv').classList.add('active'); }, 400);
@@ -1244,15 +1254,19 @@ function checkAndClear() {
     }
   });
 
-  // Combo
+  // Combo（同一波快速点击只计一次）
   const now = Date.now();
-  if (now - lastMatch < 2500) {
+  const curSeq = matchSeq;
+  if (curSeq === lastMatchSeq) {
+    // 同一波点击触发的多次消除，不重复计combo
+  } else if (now - lastMatch < 2500) {
     combo++;
     if (combo >= 2) { showCombo(combo); playSfx('combo'); }
   } else {
     combo = 1;
   }
   lastMatch = now;
+  lastMatchSeq = curSeq;
 
   setTimeout(() => {
     // 从 slots 中移除这3个
@@ -1384,15 +1398,13 @@ function shuffle(a) {
 // ===================== 音频系统 (Web Audio API) =====================
 let audioCtx = null;
 let bgmPlaying = false;
-let bgmGain = null;
-let bgmTimeout = null;
+let bgmWant = false;    // 用户是否想要音乐（意图状态）
+let bgmNode = null;     // 当前BGM的输出节点
+let bgmTimer = null;
 
 function initAudio() {
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  bgmGain = audioCtx.createGain();
-  bgmGain.gain.value = 0.15;
-  bgmGain.connect(audioCtx.destination);
 }
 
 // 简单的8-bit风格音效
@@ -1406,17 +1418,15 @@ function playSfx(type) {
   const now = audioCtx.currentTime;
 
   switch (type) {
-    case 'click': // 点击卡牌
+    case 'click':
       osc.type = 'square';
       osc.frequency.setValueAtTime(600, now);
       osc.frequency.exponentialRampToValueAtTime(900, now + 0.08);
       gain.gain.setValueAtTime(0.12, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-      osc.start(now);
-      osc.stop(now + 0.15);
+      osc.start(now); osc.stop(now + 0.15);
       break;
-
-    case 'match': // 三消成功
+    case 'match':
       osc.type = 'square';
       osc.frequency.setValueAtTime(523, now);
       osc.frequency.setValueAtTime(659, now + 0.08);
@@ -1424,32 +1434,25 @@ function playSfx(type) {
       osc.frequency.setValueAtTime(1047, now + 0.24);
       gain.gain.setValueAtTime(0.15, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      osc.start(now);
-      osc.stop(now + 0.4);
+      osc.start(now); osc.stop(now + 0.4);
       break;
-
-    case 'win': // 过关
+    case 'win':
       osc.type = 'square';
-      const winNotes = [523, 659, 784, 1047, 784, 1047, 1318];
-      winNotes.forEach((freq, i) => {
+      [523, 659, 784, 1047, 784, 1047, 1318].forEach((freq, i) => {
         osc.frequency.setValueAtTime(freq, now + i * 0.1);
       });
       gain.gain.setValueAtTime(0.15, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-      osc.start(now);
-      osc.stop(now + 0.8);
+      osc.start(now); osc.stop(now + 0.8);
       break;
-
-    case 'fail': // 失败
+    case 'fail':
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(400, now);
       osc.frequency.exponentialRampToValueAtTime(100, now + 0.5);
       gain.gain.setValueAtTime(0.12, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-      osc.start(now);
-      osc.stop(now + 0.5);
+      osc.start(now); osc.stop(now + 0.5);
       break;
-
     case 'combo':
       osc.type = 'square';
       osc.frequency.setValueAtTime(880, now);
@@ -1458,8 +1461,7 @@ function playSfx(type) {
       osc.frequency.setValueAtTime(1568, now + 0.18);
       gain.gain.setValueAtTime(0.13, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      osc.start(now);
-      osc.stop(now + 0.3);
+      osc.start(now); osc.stop(now + 0.3);
       break;
   }
 }
@@ -1505,86 +1507,117 @@ const BGM_BASS = [
   [220, 1], [262, 1],
 ];
 
+function killBGM() {
+  // 彻底杀掉当前播放：清定时器+断开音频节点
+  if (bgmTimer) { clearTimeout(bgmTimer); bgmTimer = null; }
+  if (bgmNode) { try { bgmNode.disconnect(); } catch(e){} bgmNode = null; }
+  bgmPlaying = false;
+}
+
 function playBGM() {
-  if (!audioCtx || !bgmPlaying) return;
+  if (!audioCtx || !bgmWant) return;
+  // 如果AudioContext还是suspended，等用户交互后再来
+  if (audioCtx.state === 'suspended') return;
+
+  killBGM(); // 先杀掉旧的，保证只有一份
+  bgmPlaying = true;
+
+  // 本次循环专用输出节点
+  bgmNode = audioCtx.createGain();
+  bgmNode.gain.value = 0.1;
+  bgmNode.connect(audioCtx.destination);
+
   const bpm = 142;
   const beatTime = 60 / bpm;
   const now = audioCtx.currentTime;
 
-  // 旋律 — 高音可爱方波
   let t = now + 0.05;
   for (const [freq, beats] of BGM_MELODY) {
     if (freq > 0) {
       const osc = audioCtx.createOscillator();
       const g = audioCtx.createGain();
-      osc.type = 'square';
-      osc.frequency.value = freq;
-      osc.connect(g);
-      g.connect(bgmGain);
+      osc.type = 'square'; osc.frequency.value = freq;
+      osc.connect(g); g.connect(bgmNode);
       const dur = beats * beatTime;
-      g.gain.setValueAtTime(0.10, t);
-      g.gain.setValueAtTime(0.10, t + dur * 0.6);
+      g.gain.setValueAtTime(1, t);
       g.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.9);
-      osc.start(t);
-      osc.stop(t + dur);
+      osc.start(t); osc.stop(t + dur);
     }
     t += beats * beatTime;
   }
 
-  // 低音 — 弹跳三角波
   let tb = now + 0.05;
   for (const [freq, beats] of BGM_BASS) {
     if (freq > 0) {
       const osc = audioCtx.createOscillator();
       const g = audioCtx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      osc.connect(g);
-      g.connect(bgmGain);
+      osc.type = 'triangle'; osc.frequency.value = freq;
+      osc.connect(g); g.connect(bgmNode);
       const dur = beats * beatTime;
-      g.gain.setValueAtTime(0.07, tb);
+      g.gain.setValueAtTime(0.7, tb);
       g.gain.exponentialRampToValueAtTime(0.001, tb + dur * 0.85);
-      osc.start(tb);
-      osc.stop(tb + dur);
+      osc.start(tb); osc.stop(tb + dur);
     }
     tb += beats * beatTime;
   }
 
-  // 计算总时长并循环
   const totalBeats = BGM_MELODY.reduce((s, n) => s + n[1], 0);
   const totalTime = totalBeats * beatTime * 1000;
-  bgmTimeout = setTimeout(() => playBGM(), totalTime);
+  bgmTimer = setTimeout(() => playBGM(), totalTime);
 }
 
 function startBGM() {
   initAudio();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  bgmPlaying = true;
-  playBGM();
+  bgmWant = true;
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(() => { if (bgmWant) playBGM(); });
+  } else {
+    playBGM();
+  }
   updateMusicBtn();
 }
 
 function stopBGM() {
-  bgmPlaying = false;
-  if (bgmTimeout) { clearTimeout(bgmTimeout); bgmTimeout = null; }
+  bgmWant = false;
+  killBGM();
   updateMusicBtn();
 }
 
 function toggleMusic() {
-  if (bgmPlaying) stopBGM();
+  if (bgmWant) stopBGM();
   else startBGM();
 }
 
+// 用户首次交互时恢复AudioContext
+document.addEventListener('click', function() {
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().then(() => {
+      if (bgmWant && !bgmPlaying) playBGM();
+    });
+  }
+}, { passive: true });
+
 function updateMusicBtn() {
-  const btn = document.getElementById('musicBtn');
+  const btn = document.getElementById('globalMusicBtn');
   if (btn) {
-    btn.textContent = bgmPlaying ? '🔊' : '🔇';
-    btn.title = bgmPlaying ? '关闭音乐' : '开启音乐';
+    btn.textContent = bgmWant ? '🔊' : '🔇';
+    btn.title = bgmWant ? '关闭音乐' : '开启音乐';
   }
 }
 
 // ===================== 初始化 =====================
+// URL带?reset=1可清除所有存档（测试用）
+if (new URLSearchParams(location.search).get('reset') === '1') {
+  localStorage.removeItem('choulecou_tutorial');
+  localStorage.removeItem(SAVE_KEY);
+  progress = { easy: 0, normal: 0, hard: 0 };
+  history.replaceState(null, '', location.pathname);
+}
 updateTutorialBtn();
+// 未完成教学时，自动进入新手教学
+if (localStorage.getItem('choulecou_tutorial') !== '1') {
+  startTutorial();
+}
 </script>
 </body>
 </html>
