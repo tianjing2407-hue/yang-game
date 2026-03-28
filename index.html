@@ -435,12 +435,15 @@
     <h1>臭了个臭</h1>
     <p class="sub">三消堆叠挑战 · 共45关等你来战</p>
     <button id="tutorialBtn" class="go-btn" onclick="startTutorial()" style="margin-bottom:12px;background:linear-gradient(135deg,#48dbfb,#0abde3);font-size:17px;padding:12px 44px;">📖 新手教学</button>
-    <div class="diff-row">
-      <button class="dbtn active" data-d="easy" onclick="pickDiff(this)">🌱 简单</button>
-      <button class="dbtn" data-d="normal" onclick="pickDiff(this)">🔥 普通</button>
-      <button class="dbtn" data-d="hard" onclick="pickDiff(this)">💀 困难</button>
+    <p id="tutorialHint" style="color:#f9d423;font-size:13px;margin:-4px 0 12px 0;display:none;">👆 请先完成新手教学再开始挑战哦~</p>
+    <div id="mainMenuArea" style="display:none;">
+      <div class="diff-row">
+        <button class="dbtn active" data-d="easy" onclick="pickDiff(this)">🌱 简单</button>
+        <button class="dbtn" data-d="normal" onclick="pickDiff(this)">🔥 普通</button>
+        <button class="dbtn" data-d="hard" onclick="pickDiff(this)">💀 困难</button>
+      </div>
+      <button class="go-btn" onclick="showLevelSelect()" style="margin-bottom:12px;">选择关卡</button>
     </div>
-    <button class="go-btn" onclick="showLevelSelect()" style="margin-bottom:12px;">选择关卡</button>
   </div>
   <!-- 关卡选择页 -->
   <div id="levelPage" style="display:none;width:100%;max-width:400px;padding:16px;overflow-y:auto;max-height:90vh;">
@@ -669,9 +672,18 @@ function onTutorialComplete() {
 function updateTutorialBtn() {
   const done = localStorage.getItem('choulecou_tutorial') === '1';
   const btn = $('tutorialBtn');
+  const menu = $('mainMenuArea');
+  const hint = $('tutorialHint');
   if (done) {
     btn.textContent = '✅ 新手教学（已完成）';
     btn.style.opacity = '0.7';
+    menu.style.display = '';
+    hint.style.display = 'none';
+  } else {
+    btn.textContent = '📖 新手教学';
+    btn.style.opacity = '1';
+    menu.style.display = 'none';
+    hint.style.display = '';
   }
 }
 
