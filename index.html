@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>💩 臭了臭 - 三消堆叠小游戏</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    min-height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #fff;
+  }
+
+  /* ========== 顶部 ========== */
+  .header {
+    width: 100%;
+    max-width: 420px;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+  }
+
+  .header h1 {
+    font-size: 20px;
+    background: linear-gradient(90deg, #f9d423, #ff4e50);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .level-info {
+    font-size: 14px;
+    color: #bbb;
+  }
+  .level-info span {
+    color: #f9d423;
+    font-weight: bold;
+    font-size: 18px;
+  }
+
+  /* ========== 进度条 ========== */
+  .progress-bar {
+    width: 360px;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    margin: 2px auto 6px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #48dbfb, #f9d423, #ff4e50);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+
+  /* ========== 游戏区域 ========== */
+  .game-area {
+    position: relative;
+    width: 360px;
+    height: 460px;
+    margin: 0 auto;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* ========== 卡牌 ========== */
+  .card {
+    position: absolute;
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .card.clickable {
+    background: #fff;
+    border: 2px solid rgba(255,255,255,0.6);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25), inset 0 1px 0 #fff;
+    cursor: pointer;
+  }
+  .card.clickable:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(249,212,35,0.4), inset 0 1px 0 #fff;
+  }
+  .card.clickable:active {
+    transform: scale(0.92);
+  }
+
+  .card.blocked {
+    background: #999;
+    border: 2px solid rgba(255,255,255,0.1);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    cursor: default;
+  }
+  .card.blocked img {
+    opacity: 0.35;
+  }
+
+  .card.fly-to-slot {
+    transition: left 0.35s cubic-bezier(0.34,1.56,0.64,1),
+                top 0.35s cubic-bezier(0.34,1.56,0.64,1),
+                transform 0.35s ease;
+    z-index: 99999 !important;
+    pointer-events: none;
+  }
+
+  /* ========== 底部槽位 ========== */
+  .slot-area {
+    width: 100%;
+    max-width: 420px;
+    padding: 8px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .slot-container {
+    display: flex;
+    gap: 5px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    min-height: 60px;
+    align-items: center;
+  }
+
+  .slot {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 2px dashed rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: all 0.25s ease;
+  }
+
+  .slot.filled {
+    background: #fff;
+    border: 2px solid rgba(249,212,35,0.4);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  /* 新进入的卡牌弹跳 */
+  .slot.just-entered {
+    animation: slotPop 0.3s ease;
+  }
+
+  /* 同图案的卡牌高亮抖动反馈 */
+  .slot.highlight-same {
+    animation: slotShake 0.4s ease;
+    border-color: #f9d423 !important;
+    box-shadow: 0 0 12px rgba(249,212,35,0.6) !important;
+  }
+
+  @keyframes slotPop {
+    0% { transform: scale(0.5); }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes slotShake {
+    0% { transform: translateX(0); }
+    20% { transform: translateX(-3px); }
+    40% { transform: translateX(3px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
+    100% { transform: translateX(0); }
+  }
+
+  .slot.matching {
+    animation: slotMatch 0.45s ease forwards;
+  }
+
+  @keyframes slotMatch {
+    0% { transform: scale(1); opacity: 1; }
+    40% { transform: scale(1.25); background: rgba(249,212,35,0.8); }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
+  /* ========== 道具 ========== */
+  .tools-bar {
+    display: flex;
+    gap: 10px;
+  }
+
+  .tool-btn {
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .tool-btn:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(249,212,35,0.5);
+  }
+  .tool-btn:active { transform: scale(0.95); }
+  .tool-btn .cnt {
+    background: #ff4e50;
+    color: #fff;
+    border-radius: 50%;
+    width: 18px; height: 18px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tool-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ========== 弹窗 ========== */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    backdrop-filter: blur(6px);
+  }
+  .overlay.active { display: flex; }
+
+  .modal {
+    background: linear-gradient(145deg, #2d2b55, #1b1a3a);
+    border-radius: 24px;
+    padding: 32px 40px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+    animation: modalPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes modalPop {
+    from { transform: scale(0.5); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .modal h2 { font-size: 28px; margin-bottom: 8px; }
+  .modal p { color: #aaa; margin-bottom: 22px; font-size: 14px; }
+
+  .mbtn {
+    padding: 12px 36px;
+    border-radius: 25px;
+    border: none;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 0 6px;
+  }
+  .mbtn:hover { transform: scale(1.05); }
+  .mbtn:active { transform: scale(0.95); }
+  .mbtn-p { background: linear-gradient(135deg, #f9d423, #ff4e50); color: #1a1a2e; }
+  .mbtn-s { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+
+  /* ========== 粒子 ========== */
+  .particle {
+    position: fixed;
+    pointer-events: none;
+    border-radius: 50%;
+    z-index: 99999;
+    animation: pFly 0.7s ease-out forwards;
+  }
+  @keyframes pFly {
+    0% { transform: translate(0,0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--tx),var(--ty)) scale(0); opacity: 0; }
+  }
+
+  /* ========== Combo ========== */
+  .combo-text {
+    position: fixed;
+    left: 50%; top: 35%;
+    transform: translateX(-50%);
+    font-size: 36px;
+    font-weight: bold;
+    color: #f9d423;
+    text-shadow: 0 0 30px rgba(249,212,35,0.6);
+    pointer-events: none;
+    z-index: 99999;
+    animation: comboUp 1s ease-out forwards;
+  }
+  @keyframes comboUp {
+    0% { opacity: 1; transform: translateX(-50%) scale(0.5) translateY(0); }
+    50% { transform: translateX(-50%) scale(1.3) translateY(-20px); }
+    100% { opacity: 0; transform: translateX(-50%) scale(1) translateY(-70px); }
+  }
+
+  /* ========== 开始界面 ========== */
+  .start-screen {
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100000;
+    transition: opacity 0.5s ease;
+  }
+  .start-screen.hidden { opacity: 0; pointer-events: none; }
+  .start-screen .big-icon {
+    font-size: 90px;
+    animation: bounce 2s ease-in-out infinite;
+    margin-bottom: 8px;
+  }
+  @keyframes bounce {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-18px); }
+  }
+  .start-screen h1 { font-size: 46px; margin-bottom: 6px;
+    background: linear-gradient(90deg, #f9d423, #ff4e50);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .start-screen .sub { font-size: 15px; color: #999; margin-bottom: 36px; }
+
+  /* ========== 关卡地图 ========== */
+  .level-map {
+    width: 100%; max-width: 360px;
+    position: relative;
+    padding: 20px 0;
+  }
+  .level-row {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 6px;
+    position: relative;
+  }
+  .level-node {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 17px; font-weight: bold;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    z-index: 2;
+    border: 3px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: #555;
+  }
+  .level-node:active { transform: scale(0.9); }
+  /* 已通关 */
+  .level-node.cleared {
+    background: linear-gradient(135deg, #5dff77, #48dbfb);
+    border-color: rgba(93,255,119,0.6);
+    color: #1a1a2e;
+    box-shadow: 0 2px 12px rgba(93,255,119,0.3);
+  }
+  .level-node.cleared .node-star { color: #f9d423; font-size: 10px; margin-top: 1px; }
+  /* 当前关 */
+  .level-node.current {
+    background: linear-gradient(135deg, #f9d423, #ff4e50);
+    border-color: rgba(249,212,35,0.8);
+    color: #1a1a2e;
+    box-shadow: 0 0 20px rgba(249,212,35,0.5);
+    animation: nodePulse 1.5s ease-in-out infinite;
+    transform: scale(1.12);
+  }
+  @keyframes nodePulse {
+    0%,100% { box-shadow: 0 0 12px rgba(249,212,35,0.4); }
+    50% { box-shadow: 0 0 28px rgba(249,212,35,0.7); }
+  }
+  /* 锁定 */
+  .level-node.locked {
+    opacity: 0.25;
+    cursor: not-allowed;
+  }
+  .level-node.locked .node-lock { font-size: 14px; }
+  /* 路径连线 */
+  .path-line {
+    position: absolute;
+    z-index: 1;
+    border-top: 3px dashed rgba(255,255,255,0.1);
+  }
+  .path-line.active {
+    border-top-color: rgba(93,255,119,0.35);
+  }
+
+  .diff-row { display: flex; gap: 10px; margin-bottom: 28px; }
+  .dbtn {
+    padding: 8px 22px; border-radius: 16px;
+    border: 2px solid rgba(255,255,255,0.15);
+    background: transparent; color: #ccc;
+    font-size: 14px; cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .dbtn.active { border-color: #f9d423; background: rgba(249,212,35,0.12); color: #f9d423; }
+  .dbtn:hover { border-color: #f9d423; }
+
+  .go-btn {
+    padding: 16px 64px; border-radius: 30px; border: none;
+    font-size: 20px; font-weight: bold;
+    background: linear-gradient(135deg, #f9d423, #ff4e50);
+    color: #1a1a2e; cursor: pointer;
+    box-shadow: 0 6px 30px rgba(249,212,35,0.4);
+    transition: all 0.3s ease;
+  }
+  .go-btn:hover { transform: scale(1.06); box-shadow: 0 8px 40px rgba(249,212,35,0.6); }
+</style>
+</head>
+<body>
+
+<!-- ===== 开始界面 ===== -->
+<div class="start-screen" id="startScreen">
+  <!-- 首页 -->
+  <div id="homePage">
+    <div class="big-icon">💩</div>
+    <h1>臭了臭</h1>
+    <p class="sub">三消堆叠挑战 · 共45关等你来战</p>
+    <div class="diff-row">
+      <button class="dbtn active" data-d="easy" onclick="pickDiff(this)">🌱 简单</button>
+      <button class="dbtn" data-d="normal" onclick="pickDiff(this)">🔥 普通</button>
+      <button class="dbtn" data-d="hard" onclick="pickDiff(this)">💀 困难</button>
+    </div>
+    <button class="go-btn" onclick="showLevelSelect()" style="margin-bottom:12px;">选择关卡</button>
+  </div>
+  <!-- 关卡选择页 -->
+  <div id="levelPage" style="display:none;width:100%;max-width:400px;padding:16px;overflow-y:auto;max-height:90vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button onclick="showHomePage()" style="background:none;border:1px solid rgba(255,255,255,0.2);border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;color:#fff;">←</button>
+        <h2 id="levelPageTitle" style="font-size:20px;background:linear-gradient(90deg,#f9d423,#ff4e50);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">🌱 简单模式</h2>
+      </div>
+      <span id="levelProgress" style="font-size:13px;color:#888;"></span>
+    </div>
+    <div id="levelMap" class="level-map"></div>
+  </div>
+</div>
+
+<!-- ===== 主界面 ===== -->
+<div class="header">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button onclick="goHome()" style="background:none;border:1px solid rgba(255,255,255,0.2);border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;transition:all 0.2s;" title="返回首页">🏠</button>
+    <h1>💩 臭了臭</h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button id="musicBtn" onclick="toggleMusic()" style="background:none;border:1px solid rgba(255,255,255,0.2);border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;transition:all 0.2s;">🔇</button>
+    <div class="level-info">第 <span id="lvl">1</span> 关</div>
+  </div>
+</div>
+<div class="progress-bar"><div class="progress-fill" id="pFill"></div></div>
+
+<div class="game-area" id="gameArea"></div>
+
+<div class="slot-area">
+  <div class="slot-container" id="slotBox"></div>
+  <div class="tools-bar">
+    <button class="tool-btn" id="bUndo" onclick="doUndo()">↩️ 撤回 <span class="cnt" id="cUndo">3</span></button>
+    <button class="tool-btn" id="bShuf" onclick="doShuffle()">🔀 洗牌 <span class="cnt" id="cShuf">1</span></button>
+    <button class="tool-btn" id="bHint" onclick="doRemove3()">💡 移出3个 <span class="cnt" id="cHint">1</span></button>
+  </div>
+</div>
+
+<!-- ===== 弹窗 ===== -->
+<div class="overlay" id="winOv">
+  <div class="modal">
+    <h2>🎉 恭喜过关!</h2>
+    <p id="winTxt">太厉害了！</p>
+    <button class="mbtn mbtn-p" id="winNextBtn" onclick="goNext()">下一关 →</button>
+  </div>
+</div>
+
+<div class="overlay" id="loseOv">
+  <div class="modal">
+    <h2>😵 挑战失败</h2>
+    <p>槽位已满，没法消除了…</p>
+    <button class="mbtn mbtn-p" onclick="doRetry()">再试一次</button>
+    <button class="mbtn mbtn-s" onclick="goHome()">返回首页</button>
+  </div>
+</div>
+
+<script>
+// ===================== 配置 =====================
+// 哈基米猫表情包图标
+const ICON_COUNT = 7;
+const ICONS = [];
+for (let i = 1; i <= ICON_COUNT; i++) ICONS.push('img/icons/' + i + '.png');
+
+const CW = 54, CH = 54;
+const SLOT_MAX = 7;
+const LEVELS_PER_DIFF = 15; // 每个难度15关
+const DIFF_NAMES = ['easy', 'normal', 'hard'];
+const DIFF_LABELS = { easy: '🌱 简单', normal: '🔥 普通', hard: '💀 困难' };
+
+// 每个难度15关的参数表 [layers, icons, setsPerIcon]
+const LEVEL_TABLE = {
+  easy: [
+    [2, 4, 2], [2, 4, 3], [3, 4, 2], [3, 5, 2], [3, 5, 3],
+    [3, 5, 3], [3, 6, 3], [4, 5, 3], [4, 6, 3], [4, 6, 3],
+    [4, 6, 4], [4, 7, 3], [4, 7, 4], [5, 7, 3], [5, 7, 4],
+  ],
+  normal: [
+    [3, 5, 3], [3, 5, 4], [4, 5, 3], [4, 6, 3], [4, 6, 4],
+    [4, 6, 4], [4, 7, 4], [5, 6, 4], [5, 7, 4], [5, 7, 4],
+    [5, 7, 5], [5, 7, 5], [6, 7, 4], [6, 7, 5], [6, 7, 5],
+  ],
+  hard: [
+    [4, 6, 4], [4, 7, 4], [5, 6, 4], [5, 7, 4], [5, 7, 5],
+    [5, 7, 5], [6, 7, 5], [6, 7, 5], [6, 7, 6], [6, 7, 6],
+    [7, 7, 5], [7, 7, 6], [7, 7, 6], [7, 7, 7], [7, 7, 7],
+  ],
+};
+
+// ===================== 存档系统 =====================
+const SAVE_KEY = 'choulecou_progress';
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { easy: 0, normal: 0, hard: 0 }; // 已通关的最高关卡编号（0=没通过任何关）
+}
+
+function saveProgress() {
+  localStorage.setItem(SAVE_KEY, JSON.stringify(progress));
+}
+
+function markCleared(d, lv) {
+  if (lv > progress[d]) {
+    progress[d] = lv;
+    saveProgress();
+  }
+}
+
+let progress = loadProgress();
+
+// ===================== 布局形状生成器 =====================
+// 每种形状返回一组归一化坐标 [{x:0~1, y:0~1}, ...]
+const SHAPES = {
+  // 圆形排布
+  circle(n, cx, cy, r) {
+    const pts = [];
+    // 填充圆内的点
+    const step = CW * 0.55;
+    for (let y = cy - r; y <= cy + r; y += step) {
+      for (let x = cx - r; x <= cx + r; x += step) {
+        if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) {
+          pts.push({ x, y });
+        }
+        if (pts.length >= n) return pts;
+      }
+    }
+    return pts;
+  },
+  // 菱形排布
+  diamond(n, cx, cy, size) {
+    const pts = [];
+    const step = CW * 0.55;
+    for (let y = cy - size; y <= cy + size; y += step) {
+      for (let x = cx - size; x <= cx + size; x += step) {
+        if (Math.abs(x - cx) + Math.abs(y - cy) <= size) {
+          pts.push({ x, y });
+        }
+        if (pts.length >= n) return pts;
+      }
+    }
+    return pts;
+  },
+  // 十字形排布
+  cross(n, cx, cy, arm, thickness) {
+    const pts = [];
+    const step = CW * 0.55;
+    for (let y = cy - arm; y <= cy + arm; y += step) {
+      for (let x = cx - arm; x <= cx + arm; x += step) {
+        const inH = Math.abs(y - cy) <= thickness && Math.abs(x - cx) <= arm;
+        const inV = Math.abs(x - cx) <= thickness && Math.abs(y - cy) <= arm;
+        if (inH || inV) {
+          pts.push({ x, y });
+        }
+        if (pts.length >= n) return pts;
+      }
+    }
+    return pts;
+  },
+  // 三角形排布
+  triangle(n, cx, cy, size) {
+    const pts = [];
+    const step = CW * 0.55;
+    const rows = Math.ceil(size * 2 / step);
+    for (let row = 0; row < rows; row++) {
+      const y = cy - size + row * step;
+      const progress = row / rows;
+      const halfW = size * progress;
+      for (let x = cx - halfW; x <= cx + halfW; x += step) {
+        pts.push({ x, y });
+        if (pts.length >= n) return pts;
+      }
+    }
+    return pts;
+  },
+  // 散落随机排布（加点约束避免完全混乱）
+  scatter(n, cx, cy, rangeW, rangeH) {
+    const pts = [];
+    const used = [];
+    const minDist = CW * 0.35;
+    for (let attempt = 0; attempt < n * 20 && pts.length < n; attempt++) {
+      const x = cx - rangeW / 2 + Math.random() * rangeW;
+      const y = cy - rangeH / 2 + Math.random() * rangeH;
+      // 避免太密
+      let tooClose = false;
+      for (const p of used) {
+        if (Math.abs(p.x - x) < minDist && Math.abs(p.y - y) < minDist) {
+          tooClose = true; break;
+        }
+      }
+      if (!tooClose) {
+        pts.push({ x, y });
+        used.push({ x, y });
+      }
+    }
+    return pts;
+  },
+  // 环形排布
+  ring(n, cx, cy, r) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+      pts.push({
+        x: cx + Math.cos(angle) * r,
+        y: cy + Math.sin(angle) * r,
+      });
+    }
+    return pts;
+  }
+};
+
+// 为每一层选择一种随机布局
+function generateLayerPositions(n, aw, ah, layerIdx, totalLayers) {
+  const cx = aw / 2;
+  const cy = ah / 2;
+  const shapeNames = ['circle', 'diamond', 'cross', 'triangle', 'scatter', 'ring'];
+
+  // 每层用不同形状，加偏移避免完全重叠
+  const shapeName = shapeNames[(layerIdx + Math.floor(Math.random() * 3)) % shapeNames.length];
+  // 每层略微偏移中心
+  const offsetX = (Math.random() - 0.5) * 50;
+  const offsetY = (Math.random() - 0.5) * 40;
+  const cxL = cx + offsetX;
+  const cyL = cy + offsetY;
+
+  let pts;
+  const baseSize = Math.min(aw, ah) * 0.46;
+
+  switch (shapeName) {
+    case 'circle':
+      pts = SHAPES.circle(n, cxL, cyL, baseSize);
+      break;
+    case 'diamond':
+      pts = SHAPES.diamond(n, cxL, cyL, baseSize);
+      break;
+    case 'cross':
+      pts = SHAPES.cross(n, cxL, cyL, baseSize, CW * 0.8);
+      break;
+    case 'triangle':
+      pts = SHAPES.triangle(n, cxL, cyL, baseSize);
+      break;
+    case 'ring':
+      pts = SHAPES.ring(n, cxL, cyL, baseSize * 0.85);
+      break;
+    case 'scatter':
+    default:
+      pts = SHAPES.scatter(n, cxL, cyL, aw * 0.88, ah * 0.85);
+      break;
+  }
+
+  // 加上每张卡牌的微小随机抖动
+  return pts.map(p => ({
+    x: Math.max(2, Math.min(aw - CW - 2, p.x - CW / 2 + (Math.random() - 0.5) * 8)),
+    y: Math.max(2, Math.min(ah - CH - 2, p.y - CH / 2 + (Math.random() - 0.5) * 8)),
+  }));
+}
+
+// ===================== 状态 =====================
+let diff = 'easy';
+let level = 1;          // 当前关卡（1~15）
+let cards = [];
+let slots = [];
+let totalCards = 0;
+let cleared = 0;
+let busy = false;
+let combo = 0;
+let lastMatch = 0;
+let undoStack = [];
+let nUndo = 3, nShuf = 1, nHint = 1;
+
+// ===================== UI helpers =====================
+const $ = id => document.getElementById(id);
+
+function pickDiff(b) {
+  document.querySelectorAll('.dbtn').forEach(e => e.classList.remove('active'));
+  b.classList.add('active');
+  diff = b.dataset.d;
+}
+
+function showHomePage() {
+  $('homePage').style.display = '';
+  $('levelPage').style.display = 'none';
+}
+
+function showLevelSelect() {
+  $('homePage').style.display = 'none';
+  $('levelPage').style.display = '';
+  $('levelPageTitle').textContent = DIFF_LABELS[diff] + '模式';
+  renderLevelGrid();
+}
+
+function renderLevelGrid() {
+  const map = $('levelMap');
+  map.innerHTML = '';
+  const maxCleared = progress[diff];
+  $('levelProgress').textContent = maxCleared + '/' + LEVELS_PER_DIFF + ' ⭐';
+
+  // 蜿蜒S形路径：每行3个，奇偶行左右交替
+  const perRow = 3;
+  const totalRows = Math.ceil(LEVELS_PER_DIFF / perRow);
+
+  for (let row = 0; row < totalRows; row++) {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'level-row';
+    rowDiv.style.display = 'flex';
+    rowDiv.style.gap = '24px';
+    rowDiv.style.padding = '4px 20px';
+
+    // 奇数行右对齐，偶数行左对齐（S形效果）
+    if (row % 2 === 0) {
+      rowDiv.style.justifyContent = 'flex-start';
+    } else {
+      rowDiv.style.justifyContent = 'flex-end';
+      rowDiv.style.flexDirection = 'row-reverse';
+    }
+
+    const startIdx = row * perRow + 1;
+    const endIdx = Math.min(startIdx + perRow - 1, LEVELS_PER_DIFF);
+
+    for (let i = startIdx; i <= endIdx; i++) {
+      const node = document.createElement('div');
+      node.className = 'level-node';
+
+      if (i <= maxCleared) {
+        node.classList.add('cleared');
+        node.innerHTML = i + '<span class="node-star">⭐</span>';
+        node.onclick = () => playLevel(diff, i);
+      } else if (i === maxCleared + 1) {
+        node.classList.add('current');
+        node.innerHTML = i;
+        node.onclick = () => playLevel(diff, i);
+      } else {
+        node.classList.add('locked');
+        node.innerHTML = '<span class="node-lock">🔒</span>';
+      }
+
+      rowDiv.appendChild(node);
+    }
+
+    map.appendChild(rowDiv);
+
+    // 行间添加连接线指示器
+    if (row < totalRows - 1) {
+      const connector = document.createElement('div');
+      connector.style.cssText = 'text-align:center;color:rgba(255,255,255,0.15);font-size:20px;margin:2px 0;letter-spacing:4px;';
+      // 连接线方向跟随S形
+      if (row % 2 === 0) {
+        connector.style.textAlign = 'right';
+        connector.style.paddingRight = '40px';
+      } else {
+        connector.style.textAlign = 'left';
+        connector.style.paddingLeft = '40px';
+      }
+      const nextRowStart = (row + 1) * perRow + 1;
+      connector.textContent = '⋮';
+      connector.style.color = nextRowStart <= maxCleared + 1 ? 'rgba(93,255,119,0.4)' : 'rgba(255,255,255,0.12)';
+      map.appendChild(connector);
+    }
+  }
+}
+
+function playLevel(d, lv) {
+  diff = d;
+  level = lv;
+  $('startScreen').classList.add('hidden');
+  startBGM();
+  initLevel();
+}
+
+function startGame() {
+  // 快速开始：跳到当前难度未通关的第一关
+  const nextLv = progress[diff] + 1;
+  if (nextLv > LEVELS_PER_DIFF) {
+    // 已全通，从第1关开始
+    playLevel(diff, 1);
+  } else {
+    playLevel(diff, nextLv);
+  }
+}
+
+function goNext() {
+  $('winOv').classList.remove('active');
+  if (level < LEVELS_PER_DIFF) {
+    level++;
+    initLevel();
+  } else {
+    // 该难度全部通关
+    goHome();
+  }
+}
+function doRetry() {
+  $('loseOv').classList.remove('active');
+  initLevel();
+}
+function goHome() {
+  $('loseOv').classList.remove('active');
+  $('winOv').classList.remove('active');
+  $('startScreen').classList.remove('hidden');
+  showHomePage();
+  stopBGM();
+}
+
+// ===================== 初始化关卡 =====================
+function initLevel() {
+  const table = LEVEL_TABLE[diff];
+  const cfg = table[Math.min(level - 1, table.length - 1)];
+  const layers = cfg[0];
+  const iconCnt = Math.min(cfg[1], ICONS.length);
+  const setsPerIcon = cfg[2];
+
+  $('lvl').textContent = level + '/' + LEVELS_PER_DIFF;
+
+  // 重置
+  cards = []; slots = []; cleared = 0; combo = 0; undoStack = []; busy = false;
+  nUndo = 3; nShuf = 1; nHint = 1;
+  refreshToolBtns();
+
+  // 生成图标池（每种3的倍数）
+  const used = ICONS.slice(0, iconCnt);
+  let pool = [];
+  for (const icon of used) {
+    for (let s = 0; s < setsPerIcon; s++) {
+      pool.push(icon, icon, icon);
+    }
+  }
+  shuffle(pool);
+  totalCards = pool.length;
+
+  // 生成卡牌位置 — 用不规则形状布局
+  const area = $('gameArea');
+  const aw = area.clientWidth || 360;
+  const ah = area.clientHeight || 460;
+
+  // 每层分配的卡牌数
+  const perLayer = Math.ceil(pool.length / layers);
+  let idx = 0;
+
+  for (let layer = 0; layer < layers && idx < pool.length; layer++) {
+    const cnt = Math.min(perLayer, pool.length - idx);
+    const positions = generateLayerPositions(cnt, aw, ah, layer, layers);
+
+    for (let i = 0; i < positions.length && idx < pool.length; i++) {
+      cards.push({
+        id: idx,
+        icon: pool[idx],
+        x: positions[i].x,
+        y: positions[i].y,
+        layer: layer,
+        removed: false,
+      });
+      idx++;
+    }
+  }
+
+  drawBoard();
+  drawSlots();
+  updateProgress();
+}
+
+// ===================== 遮挡计算 =====================
+function getBlocked() {
+  const act = cards.filter(c => !c.removed);
+  const blocked = new Set();
+  for (const a of act) {
+    for (const b of act) {
+      if (a === b) continue;
+      if (b.layer > a.layer) {
+        // 只要有30%重叠就算被遮挡，不可点击（提升难度）
+        const ox = Math.min(a.x + CW, b.x + CW) - Math.max(a.x, b.x);
+        const oy = Math.min(a.y + CH, b.y + CH) - Math.max(a.y, b.y);
+        if (ox > CW * 0.3 && oy > CH * 0.3) {
+          blocked.add(a.id);
+        }
+      }
+    }
+  }
+  return blocked;
+}
+
+// ===================== 绘制牌面 =====================
+function drawBoard() {
+  const area = $('gameArea');
+  area.innerHTML = '';
+  const active = cards.filter(c => !c.removed).sort((a, b) => a.layer - b.layer);
+  const blocked = getBlocked();
+
+  active.forEach((card, ri) => {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.dataset.id = card.id;
+    el.style.left = card.x + 'px';
+    el.style.top = card.y + 'px';
+    el.style.zIndex = card.layer * 100 + ri;
+    // 用图片渲染
+    el.innerHTML = '<img src="' + card.icon + '" draggable="false" style="width:100%;height:100%;border-radius:10px;object-fit:cover;pointer-events:none;">';
+
+    if (blocked.has(card.id)) {
+      el.classList.add('blocked');
+    } else {
+      el.classList.add('clickable');
+      el.onclick = () => clickCard(card, el);
+    }
+    area.appendChild(el);
+  });
+}
+
+// ===================== 绘制槽位 =====================
+// newIdx: 刚进入的卡牌在slots中的索引, highlightIcon: 需要高亮的同图案
+function drawSlots(newIdx, highlightIcon) {
+  const box = $('slotBox');
+  box.innerHTML = '';
+  for (let i = 0; i < SLOT_MAX; i++) {
+    const s = document.createElement('div');
+    s.className = 'slot';
+    if (i < slots.length) {
+      s.classList.add('filled');
+      s.innerHTML = '<img src="' + slots[i].icon + '" draggable="false" style="width:100%;height:100%;border-radius:8px;object-fit:cover;pointer-events:none;">';
+      // 刚进入的那个：弹跳
+      if (i === newIdx) {
+        s.classList.add('just-entered');
+      }
+      // 同图案的已有卡牌（不包括刚进入的自己）：高亮抖动
+      else if (highlightIcon && slots[i].icon === highlightIcon) {
+        s.classList.add('highlight-same');
+      }
+    }
+    box.appendChild(s);
+  }
+}
+
+// ===================== 点击卡牌（核心逻辑重写） =====================
+function clickCard(card, el) {
+  if (busy) return;
+  if (slots.length >= SLOT_MAX) return;
+
+  busy = true;
+
+  // 播放点击音效
+  playSfx('click');
+  undoStack.push({ cardId: card.id, slotSnap: slots.map(s => ({ ...s })) });
+
+  // 标记移除
+  card.removed = true;
+
+  // === 飞行动画 ===
+  // 计算目标槽位位置
+  let insertIdx = findInsertIdx(card.icon);
+
+  // 获取游戏区域和卡牌的绝对位置
+  const areaRect = $('gameArea').getBoundingClientRect();
+  const slotBox = $('slotBox');
+
+  // 先在 slots 数组中插入，这样我们才知道它去第几格
+  slots.splice(insertIdx, 0, { id: card.id, icon: card.icon });
+
+  // 判断槽位中是否有同图案的（排除刚加入的自己）
+  const hasSameIcon = slots.some((s, i) => i !== insertIdx && s.icon === card.icon);
+
+  // 重绘槽位拿到目标位置（此次不带动画，飞行结束后再加动画）
+  drawSlots(-1, null);
+  const slotEls = slotBox.querySelectorAll('.slot');
+  const targetSlot = slotEls[insertIdx];
+  const targetRect = targetSlot.getBoundingClientRect();
+
+  // 创建飞行卡牌（fixed定位）
+  const flyer = document.createElement('div');
+  flyer.className = 'card clickable';
+  flyer.innerHTML = '<img src="' + card.icon + '" draggable="false" style="width:100%;height:100%;border-radius:10px;object-fit:cover;pointer-events:none;">';
+  flyer.style.position = 'fixed';
+  flyer.style.left = (areaRect.left + card.x) + 'px';
+  flyer.style.top = (areaRect.top + card.y) + 'px';
+  flyer.style.width = CW + 'px';
+  flyer.style.height = CH + 'px';
+  flyer.style.zIndex = '99999';
+  flyer.style.margin = '0';
+  flyer.style.transition = 'left 0.32s cubic-bezier(0.34,1.56,0.64,1), top 0.32s cubic-bezier(0.34,1.56,0.64,1), width 0.32s ease, height 0.32s ease';
+  document.body.appendChild(flyer);
+
+  // 从牌面先移除这张卡
+  drawBoard();
+
+  // 下一帧触发动画
+  requestAnimationFrame(() => {
+    flyer.style.left = targetRect.left + 'px';
+    flyer.style.top = targetRect.top + 'px';
+    flyer.style.width = '46px';
+    flyer.style.height = '46px';
+  });
+
+  // 动画结束后处理
+  setTimeout(() => {
+    flyer.remove();
+    // 到位后：新卡弹跳 + 同图案高亮
+    drawSlots(insertIdx, hasSameIcon ? card.icon : null);
+    updateProgress();
+
+    // 检查三消
+    setTimeout(() => {
+      checkAndClear();
+    }, 80);
+  }, 350);
+}
+
+// 找到同图标应该插入的位置（紧挨已有的同图标后面）
+function findInsertIdx(icon) {
+  let idx = slots.length;  // 默认追加到末尾
+  let foundFirst = -1;
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i].icon === icon) {
+      if (foundFirst === -1) foundFirst = i;
+      idx = i + 1; // 持续往后找
+    }
+  }
+  // 如果找到了同类，idx 就是最后一个同类后面
+  if (foundFirst !== -1) return idx;
+  return slots.length; // 没找到就追加到最后
+}
+
+// ===================== 三消检查 =====================
+function checkAndClear() {
+  // 扫描：是否有某个图标连续出现了3次
+  // 由于插入时会将同图标排在一起，所以检查连续即可
+  let matchIcon = null;
+  let matchStart = -1;
+
+  const counts = {};
+  for (let i = 0; i < slots.length; i++) {
+    const icon = slots[i].icon;
+    counts[icon] = (counts[icon] || 0) + 1;
+    if (counts[icon] >= 3) {
+      matchIcon = icon;
+      break;
+    }
+  }
+
+  if (!matchIcon) {
+    busy = false;
+    // 检查失败
+    if (slots.length >= SLOT_MAX) {
+      setTimeout(() => { playSfx('fail'); $('loseOv').classList.add('active'); }, 400);
+    }
+    return;
+  }
+
+  // 找到这3张的索引
+  const indices = [];
+  for (let i = 0; i < slots.length && indices.length < 3; i++) {
+    if (slots[i].icon === matchIcon) indices.push(i);
+  }
+
+  // 播放消除动画
+  const slotEls = $('slotBox').querySelectorAll('.slot');
+  playSfx('match');
+  indices.forEach(i => {
+    if (slotEls[i]) {
+      slotEls[i].classList.add('matching');
+      spawnParticles(slotEls[i]);
+    }
+  });
+
+  // Combo
+  const now = Date.now();
+  if (now - lastMatch < 2500) {
+    combo++;
+    if (combo >= 2) { showCombo(combo); playSfx('combo'); }
+  } else {
+    combo = 1;
+  }
+  lastMatch = now;
+
+  setTimeout(() => {
+    // 从 slots 中移除这3个
+    const removeSet = new Set(indices.map(i => slots[i].id));
+    slots = slots.filter(s => !removeSet.has(s.id));
+    cleared += 3;
+
+    drawSlots();
+    updateProgress();
+
+    // 胜利？
+    if (cleared >= totalCards) {
+      markCleared(diff, level); // 保存进度
+      setTimeout(() => {
+        playSfx('win');
+        if (level >= LEVELS_PER_DIFF) {
+          $('winTxt').textContent = '🏆 恭喜通关全部 ' + DIFF_LABELS[diff] + ' 关卡！';
+        } else {
+          $('winTxt').textContent = combo >= 3 ? '🔥 Combo 大师！' : level >= 10 ? '💪 高手！继续吧！' : '🎊 不错哦，加油！';
+        }
+        $('winOv').classList.add('active');
+        $('winNextBtn').textContent = level >= LEVELS_PER_DIFF ? '🏠 返回关卡' : '下一关 →';
+      }, 400);
+      busy = false;
+      return;
+    }
+
+    // 递归检查还有没有能消的
+    setTimeout(() => checkAndClear(), 150);
+  }, 420);
+}
+
+// ===================== 粒子 =====================
+function spawnParticles(el) {
+  const r = el.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const colors = ['#f9d423','#ff4e50','#48dbfb','#ff9ff3','#54a0ff','#5dff77'];
+  for (let i = 0; i < 10; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = cx + 'px'; p.style.top = cy + 'px';
+    const sz = 4 + Math.random() * 7;
+    p.style.width = sz + 'px'; p.style.height = sz + 'px';
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.setProperty('--tx', (Math.random() - 0.5) * 120 + 'px');
+    p.style.setProperty('--ty', (Math.random() - 0.5) * 120 + 'px');
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 700);
+  }
+}
+
+function showCombo(n) {
+  const t = document.createElement('div');
+  t.className = 'combo-text';
+  t.textContent = `🔥 ${n} Combo!`;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 1000);
+}
+
+// ===================== 进度 =====================
+function updateProgress() {
+  $('pFill').style.width = (totalCards > 0 ? cleared / totalCards * 100 : 0) + '%';
+}
+
+// ===================== 道具 =====================
+function doUndo() {
+  if (nUndo <= 0 || undoStack.length === 0 || busy) return;
+  nUndo--;
+  refreshToolBtns();
+  const last = undoStack.pop();
+  const card = cards.find(c => c.id === last.cardId);
+  if (card) {
+    card.removed = false;
+    slots = last.slotSnap;
+    drawBoard();
+    drawSlots();
+  }
+}
+
+function doShuffle() {
+  if (nShuf <= 0 || busy) return;
+  nShuf--;
+  refreshToolBtns();
+  const act = cards.filter(c => !c.removed);
+  const icons = act.map(c => c.icon);
+  shuffle(icons);
+  act.forEach((c, i) => c.icon = icons[i]);
+  drawBoard();
+}
+
+function doRemove3() {
+  if (nHint <= 0 || slots.length < 1 || busy) return;
+  nHint--;
+  refreshToolBtns();
+  const cnt = Math.min(3, slots.length);
+  const removed = slots.splice(-cnt, cnt);
+  removed.forEach(s => {
+    const card = cards.find(c => c.id === s.id);
+    if (card) { card.removed = false; card.layer += 20; }
+  });
+  drawBoard();
+  drawSlots();
+}
+
+function refreshToolBtns() {
+  $('cUndo').textContent = nUndo;
+  $('cShuf').textContent = nShuf;
+  $('cHint').textContent = nHint;
+  $('bUndo').disabled = nUndo <= 0;
+  $('bShuf').disabled = nShuf <= 0;
+  $('bHint').disabled = nHint <= 0;
+}
+
+// ===================== 工具 =====================
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ===================== 音频系统 (Web Audio API) =====================
+let audioCtx = null;
+let bgmPlaying = false;
+let bgmGain = null;
+let bgmTimeout = null;
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  bgmGain = audioCtx.createGain();
+  bgmGain.gain.value = 0.15;
+  bgmGain.connect(audioCtx.destination);
+}
+
+// 简单的8-bit风格音效
+function playSfx(type) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  const now = audioCtx.currentTime;
+
+  switch (type) {
+    case 'click': // 点击卡牌
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(600, now);
+      osc.frequency.exponentialRampToValueAtTime(900, now + 0.08);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
+      break;
+
+    case 'match': // 三消成功
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(523, now);
+      osc.frequency.setValueAtTime(659, now + 0.08);
+      osc.frequency.setValueAtTime(784, now + 0.16);
+      osc.frequency.setValueAtTime(1047, now + 0.24);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.start(now);
+      osc.stop(now + 0.4);
+      break;
+
+    case 'win': // 过关
+      osc.type = 'square';
+      const winNotes = [523, 659, 784, 1047, 784, 1047, 1318];
+      winNotes.forEach((freq, i) => {
+        osc.frequency.setValueAtTime(freq, now + i * 0.1);
+      });
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+      osc.start(now);
+      osc.stop(now + 0.8);
+      break;
+
+    case 'fail': // 失败
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(400, now);
+      osc.frequency.exponentialRampToValueAtTime(100, now + 0.5);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      osc.start(now);
+      osc.stop(now + 0.5);
+      break;
+
+    case 'combo':
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1108, now + 0.06);
+      osc.frequency.setValueAtTime(1318, now + 0.12);
+      osc.frequency.setValueAtTime(1568, now + 0.18);
+      gain.gain.setValueAtTime(0.13, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
+      break;
+  }
+}
+
+// 背景音乐 — Nyan Cat（彩虹猫）经典旋律还原 🌈🐱
+// 互联网最经典的猫咪meme BGM，8-bit电子风
+const BGM_MELODY = [
+  // A段主旋律
+  [587, 0.5], [659, 0.5], [523, 0.5], [440, 0.5],
+  [440, 0.5], [523, 0.5], [659, 0.5], [587, 0.5],
+  [523, 0.5], [440, 0.5], [440, 0.5], [523, 0.5],
+  [587, 1], [659, 0.5], [587, 0.5],
+  // 重复A段
+  [587, 0.5], [659, 0.5], [523, 0.5], [440, 0.5],
+  [440, 0.5], [523, 0.5], [659, 0.5], [587, 0.5],
+  [523, 0.5], [440, 0.5], [523, 0.5], [587, 0.5],
+  [523, 1], [0, 0.5], [440, 0.5],
+  // B段 — 高音部分
+  [880, 0.5], [784, 0.5], [659, 0.5], [784, 0.5],
+  [880, 0.5], [784, 0.5], [659, 0.5], [523, 0.5],
+  [587, 0.5], [659, 0.5], [587, 0.5], [523, 0.5],
+  [440, 1], [523, 0.5], [587, 0.5],
+  // B段变化
+  [659, 0.5], [784, 0.5], [880, 0.5], [784, 0.5],
+  [659, 0.5], [587, 0.5], [523, 0.5], [587, 0.5],
+  [659, 0.5], [523, 0.5], [440, 0.5], [523, 0.5],
+  [587, 1], [0, 1],
+];
+
+const BGM_BASS = [
+  // 弹跳低音线
+  [294, 1], [330, 1], [262, 1], [220, 1],
+  [294, 1], [330, 1], [262, 1], [220, 1],
+  [294, 1], [330, 1], [262, 1], [220, 1],
+  [294, 1], [330, 1],
+  [294, 1], [330, 1], [262, 1], [220, 1],
+  [294, 1], [330, 1], [262, 1], [220, 1],
+  [262, 1], [220, 1], [262, 1], [294, 1],
+  [262, 1], [0, 1],
+  [440, 1], [392, 1], [330, 1], [392, 1],
+  [440, 1], [392, 1], [330, 1], [262, 1],
+  [294, 1], [330, 1], [294, 1], [262, 1],
+  [220, 1], [262, 1],
+];
+
+function playBGM() {
+  if (!audioCtx || !bgmPlaying) return;
+  const bpm = 142;
+  const beatTime = 60 / bpm;
+  const now = audioCtx.currentTime;
+
+  // 旋律 — 高音可爱方波
+  let t = now + 0.05;
+  for (const [freq, beats] of BGM_MELODY) {
+    if (freq > 0) {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      osc.connect(g);
+      g.connect(bgmGain);
+      const dur = beats * beatTime;
+      g.gain.setValueAtTime(0.10, t);
+      g.gain.setValueAtTime(0.10, t + dur * 0.6);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.9);
+      osc.start(t);
+      osc.stop(t + dur);
+    }
+    t += beats * beatTime;
+  }
+
+  // 低音 — 弹跳三角波
+  let tb = now + 0.05;
+  for (const [freq, beats] of BGM_BASS) {
+    if (freq > 0) {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      osc.connect(g);
+      g.connect(bgmGain);
+      const dur = beats * beatTime;
+      g.gain.setValueAtTime(0.07, tb);
+      g.gain.exponentialRampToValueAtTime(0.001, tb + dur * 0.85);
+      osc.start(tb);
+      osc.stop(tb + dur);
+    }
+    tb += beats * beatTime;
+  }
+
+  // 计算总时长并循环
+  const totalBeats = BGM_MELODY.reduce((s, n) => s + n[1], 0);
+  const totalTime = totalBeats * beatTime * 1000;
+  bgmTimeout = setTimeout(() => playBGM(), totalTime);
+}
+
+function startBGM() {
+  initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  bgmPlaying = true;
+  playBGM();
+  updateMusicBtn();
+}
+
+function stopBGM() {
+  bgmPlaying = false;
+  if (bgmTimeout) { clearTimeout(bgmTimeout); bgmTimeout = null; }
+  updateMusicBtn();
+}
+
+function toggleMusic() {
+  if (bgmPlaying) stopBGM();
+  else startBGM();
+}
+
+function updateMusicBtn() {
+  const btn = document.getElementById('musicBtn');
+  if (btn) {
+    btn.textContent = bgmPlaying ? '🔊' : '🔇';
+    btn.title = bgmPlaying ? '关闭音乐' : '开启音乐';
+  }
+}
+</script>
+</body>
+</html>

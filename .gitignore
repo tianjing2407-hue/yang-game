@@ -1,0 +1,4 @@
+*.py
+.DS_Store
+img/raw_*
+img/A_*
