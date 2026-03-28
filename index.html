@@ -434,6 +434,7 @@
     <div class="big-icon">💩</div>
     <h1>臭了臭</h1>
     <p class="sub">三消堆叠挑战 · 共45关等你来战</p>
+    <button id="tutorialBtn" class="go-btn" onclick="startTutorial()" style="margin-bottom:12px;background:linear-gradient(135deg,#48dbfb,#0abde3);font-size:17px;padding:12px 44px;">📖 新手教学</button>
     <div class="diff-row">
       <button class="dbtn active" data-d="easy" onclick="pickDiff(this)">🌱 简单</button>
       <button class="dbtn" data-d="normal" onclick="pickDiff(this)">🔥 普通</button>
@@ -496,6 +497,12 @@
   </div>
 </div>
 
+<!-- ===== 教学提示 ===== -->
+<div id="tutorialTip" style="display:none;position:fixed;bottom:140px;left:50%;transform:translateX(-50%);z-index:100001;background:rgba(0,0,0,0.85);color:#fff;padding:14px 22px;border-radius:16px;font-size:15px;text-align:center;max-width:320px;border:2px solid rgba(249,212,35,0.5);box-shadow:0 4px 24px rgba(0,0,0,0.5);animation:modalPop 0.4s cubic-bezier(0.34,1.56,0.64,1);">
+  <div id="tutorialTipText"></div>
+  <button onclick="nextTutorialStep()" class="mbtn mbtn-p" style="margin-top:10px;padding:8px 24px;font-size:13px;" id="tutorialNextBtn">知道了 👌</button>
+</div>
+
 <script>
 // ===================== 配置 =====================
 // 哈基米猫表情包图标
@@ -551,6 +558,122 @@ function markCleared(d, lv) {
 }
 
 let progress = loadProgress();
+
+// ===================== 教学系统 =====================
+let isTutorial = false;
+let tutorialStep = 0;
+const TUTORIAL_STEPS = [
+  '👆 欢迎来到 <b>臭了臭</b>！<br>这是一个三消堆叠小游戏',
+  '🎯 玩法很简单：<br>点击<b>亮色卡牌</b>，它会飞到底部槽位',
+  '✨ 集齐 <b>3张相同</b> 的卡牌就能消除！<br>现在试试点一张卡牌吧',
+];
+const TUTORIAL_STEP_CLEAR = '🎉 太棒了！你学会了！<br>消除所有卡牌即可过关';
+
+function startTutorial() {
+  isTutorial = true;
+  tutorialStep = 0;
+  diff = 'easy';
+  level = 1;
+  $('startScreen').classList.add('hidden');
+  startBGM();
+  initTutorialLevel();
+  showTutorialTip(TUTORIAL_STEPS[0]);
+}
+
+function initTutorialLevel() {
+  // 超简单的教学关：1层，2种图案，每种3张=共6张
+  const iconCnt = 2;
+  const setsPerIcon = 1;
+  const layers = 1;
+
+  $('lvl').textContent = '教学';
+
+  // 重置
+  cards = []; slots = []; cleared = 0; combo = 0; undoStack = []; busy = false;
+  nUndo = 3; nShuf = 1; nHint = 1;
+  refreshToolBtns();
+
+  const used = ICONS.slice(0, iconCnt);
+  let pool = [];
+  for (const icon of used) {
+    for (let s = 0; s < setsPerIcon; s++) {
+      pool.push(icon, icon, icon);
+    }
+  }
+  shuffle(pool);
+  totalCards = pool.length;
+
+  const area = $('gameArea');
+  const aw = area.clientWidth || 360;
+  const ah = area.clientHeight || 460;
+
+  // 简单的散落布局
+  const positions = SHAPES.scatter(pool.length, aw / 2, ah / 2, aw * 0.6, ah * 0.4);
+
+  let idx = 0;
+  for (let i = 0; i < positions.length && idx < pool.length; i++) {
+    cards.push({
+      id: idx,
+      icon: pool[idx],
+      x: positions[i].x,
+      y: positions[i].y,
+      layer: 0,
+      removed: false,
+    });
+    idx++;
+  }
+
+  drawBoard();
+  drawSlots();
+  updateProgress();
+}
+
+function showTutorialTip(html) {
+  $('tutorialTipText').innerHTML = html;
+  $('tutorialTip').style.display = 'block';
+  // 如果是最后一步（让玩家操作），隐藏按钮
+  if (tutorialStep >= 2) {
+    $('tutorialNextBtn').style.display = 'none';
+  } else {
+    $('tutorialNextBtn').style.display = '';
+  }
+}
+
+function hideTutorialTip() {
+  $('tutorialTip').style.display = 'none';
+}
+
+function nextTutorialStep() {
+  tutorialStep++;
+  if (tutorialStep < TUTORIAL_STEPS.length) {
+    showTutorialTip(TUTORIAL_STEPS[tutorialStep]);
+  } else {
+    hideTutorialTip();
+  }
+}
+
+function onTutorialMatch() {
+  // 第一次消除时显示鼓励
+  showTutorialTip(TUTORIAL_STEP_CLEAR);
+  $('tutorialNextBtn').style.display = '';
+  $('tutorialNextBtn').textContent = '继续玩 🎮';
+  $('tutorialNextBtn').onclick = () => { hideTutorialTip(); };
+}
+
+function onTutorialComplete() {
+  isTutorial = false;
+  localStorage.setItem('choulecou_tutorial', '1');
+  updateTutorialBtn();
+}
+
+function updateTutorialBtn() {
+  const done = localStorage.getItem('choulecou_tutorial') === '1';
+  const btn = $('tutorialBtn');
+  if (done) {
+    btn.textContent = '✅ 新手教学（已完成）';
+    btn.style.opacity = '0.7';
+  }
+}
 
 // ===================== 布局形状生成器 =====================
 // 每种形状返回一组归一化坐标 [{x:0~1, y:0~1}, ...]
@@ -823,11 +946,15 @@ function startGame() {
 
 function goNext() {
   $('winOv').classList.remove('active');
+  if (isTutorial) {
+    isTutorial = false;
+    goHome();
+    return;
+  }
   if (level < LEVELS_PER_DIFF) {
     level++;
     initLevel();
   } else {
-    // 该难度全部通关
     goHome();
   }
 }
@@ -840,6 +967,9 @@ function goHome() {
   $('winOv').classList.remove('active');
   $('startScreen').classList.remove('hidden');
   showHomePage();
+  hideTutorialTip();
+  isTutorial = false;
+  updateTutorialBtn();
   stopBGM();
 }
 
@@ -1094,6 +1224,7 @@ function checkAndClear() {
   // 播放消除动画
   const slotEls = $('slotBox').querySelectorAll('.slot');
   playSfx('match');
+  if (isTutorial && tutorialStep >= 2) onTutorialMatch();
   indices.forEach(i => {
     if (slotEls[i]) {
       slotEls[i].classList.add('matching');
@@ -1122,16 +1253,22 @@ function checkAndClear() {
 
     // 胜利？
     if (cleared >= totalCards) {
-      markCleared(diff, level); // 保存进度
+      if (isTutorial) { onTutorialComplete(); }
+      else { markCleared(diff, level); }
       setTimeout(() => {
         playSfx('win');
-        if (level >= LEVELS_PER_DIFF) {
+        hideTutorialTip();
+        if (isTutorial) {
+          $('winTxt').textContent = '🎓 教学完成！你已经学会玩了！';
+          $('winNextBtn').textContent = '🏠 开始正式挑战';
+        } else if (level >= LEVELS_PER_DIFF) {
           $('winTxt').textContent = '🏆 恭喜通关全部 ' + DIFF_LABELS[diff] + ' 关卡！';
+          $('winNextBtn').textContent = '🏠 返回关卡';
         } else {
           $('winTxt').textContent = combo >= 3 ? '🔥 Combo 大师！' : level >= 10 ? '💪 高手！继续吧！' : '🎊 不错哦，加油！';
+          $('winNextBtn').textContent = '下一关 →';
         }
         $('winOv').classList.add('active');
-        $('winNextBtn').textContent = level >= LEVELS_PER_DIFF ? '🏠 返回关卡' : '下一关 →';
       }, 400);
       busy = false;
       return;
@@ -1433,6 +1570,9 @@ function updateMusicBtn() {
     btn.title = bgmPlaying ? '关闭音乐' : '开启音乐';
   }
 }
+
+// ===================== 初始化 =====================
+updateTutorialBtn();
 </script>
 </body>
 </html>
